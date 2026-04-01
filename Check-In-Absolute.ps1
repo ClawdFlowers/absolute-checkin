@@ -2,7 +2,7 @@
 
 <#
     Absolute check-in helper
-    Version: 0.5
+    Version: 0.6.1
 
     What it does:
     - Ensures the script is running as Administrator
@@ -15,8 +15,6 @@
     - Leaves the copied files on the machine for future monthly use
     - Does NOT close windows automatically
 #>
-
-$ScriptVersion = "0.5"
 
 param(
     [string]$SourceFolder = "D:\AbtPS_SDK_1.3",
