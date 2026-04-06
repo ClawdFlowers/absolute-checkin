@@ -1,15 +1,15 @@
 #requires -Version 5.1
 
 <#
-    Absolute check-in helper
-    Version: 0.6.1
+    Absolute Check-In Helper
+    Version: 0.6.2
 
     What it does:
     - Ensures the script is running as Administrator
     - Copies the entire AbtPS_SDK_1.3 folder locally if it is missing
     - Runs AbtPS.exe -c to start the check-in
-    - Waits 60 seconds before the first status check
-    - Polls AbtPS.exe -l every 60 seconds to monitor status
+    - Waits 30 seconds before the first status check
+    - Polls AbtPS.exe -l every 30 seconds to monitor status
     - Retries automatically up to 3 times if the call fails
     - Opens a secondary CMD window in the correct folder for manual checks
     - Leaves the copied files on the machine for future monthly use
@@ -17,14 +17,27 @@
 #>
 
 param(
-    [string]$SourceFolder = "D:\AbtPS_SDK_1.3",
+    # Drive letter passed from BAT launcher (e.g., "D:")
+    [string]$ScriptDrive = "D:",
+    
+    # Construct source folder from detected drive
+    [string]$SourceFolder = "$ScriptDrive\AbtPS_SDK_1.3",
+    
     [string]$LocalParentFolder = "$env:ProgramData",
     [int]$MaxRetries = 3,
-    [int]$InitialWaitSeconds = 60,
-    [int]$PollSeconds = 60
+    [int]$InitialWaitSeconds = 30,
+    [int]$PollSeconds = 30
 )
 
+$ScriptVersion = "0.6.2"
 $ErrorActionPreference = "Stop"
+
+# Display version info at startup
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "  Absolute Check-In Helper" -ForegroundColor Cyan
+Write-Host "  Version: $ScriptVersion" -ForegroundColor Cyan
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host ""
 
 function Write-Info($msg) {
     Write-Host "[INFO]  $msg" -ForegroundColor Cyan

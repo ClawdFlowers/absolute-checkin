@@ -3,15 +3,20 @@ setlocal
 
 REM ==========================================
 REM Absolute Check-In Launcher
-REM Version: 0.6
+REM Version: 0.6.2
 REM ==========================================
+
+REM Get the drive letter where this BAT file is running from
+set "SCRIPT_DRIVE=%~d0"
 
 set "SCRIPT_DIR=%~dp0"
 set "PS_SCRIPT=%SCRIPT_DIR%Check-In-Absolute.ps1"
 
 echo ==========================================
-echo   Absolute Check-In Launcher v0.6
+echo   Absolute Check-In Launcher
+echo   Version: 0.6.2
 echo ==========================================
+echo [INFO] Detected drive: %SCRIPT_DRIVE%
 echo.
 
 REM Check that the PowerShell script exists
@@ -42,7 +47,8 @@ echo [OK] Running with Administrator rights.
 echo [INFO] Launching PowerShell script...
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
+REM Pass the detected drive to PowerShell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -ScriptDrive "%SCRIPT_DRIVE%"
 set "EXITCODE=%ERRORLEVEL%"
 
 echo.
