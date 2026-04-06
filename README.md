@@ -85,3 +85,6 @@ Planned future improvements:
 This project is intended to stay small, practical, and maintainable.
 
 The goal is not to build a giant software platform. The goal is to save time and reduce repetitive manual steps during monthly Absolute check-ins.
+
+## AI Disclosure
+This project utilized AI in it's coding process, but does not utilize AI tools when making calls or in it's execution.
