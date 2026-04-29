@@ -24,7 +24,7 @@ param(
     [int]$PollSeconds = 30
 )
 
-$ScriptVersion = "0.7.1"
+$ScriptVersion = "0.7.1a"
 $ErrorActionPreference = "Stop"
 
 function Write-Info($msg) {

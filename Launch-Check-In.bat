@@ -11,7 +11,7 @@ set "PS_SCRIPT=%SCRIPT_DIR%Check-In-Absolute.ps1"
 
 echo ==========================================
 echo   Absolute Check-In Launcher
-echo   Version: 0.7.1
+echo   Version: 0.7.1a
 echo ==========================================
 echo.
 
