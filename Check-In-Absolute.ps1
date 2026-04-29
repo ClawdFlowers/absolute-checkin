@@ -2,42 +2,30 @@
 
 <#
     Absolute Check-In Helper
-    Version: 0.6.2
+    Version: 0.7.0
 
     What it does:
-    - Ensures the script is running as Administrator
-    - Copies the entire AbtPS_SDK_1.3 folder locally if it is missing
+    - Installs to ProgramData if running from elsewhere
+    - Checks GitHub for latest version and self-updates
+    - Validates AbtPS_SDK_1.3 exists locally
     - Runs AbtPS.exe -c to start the check-in
     - Waits 30 seconds before the first status check
-    - Polls AbtPS.exe -l every 30 seconds to monitor status
+    - Polls AbtPS.exe -l every 30 seconds
     - Retries automatically up to 3 times if the call fails
     - Opens a secondary CMD window in the correct folder for manual checks
     - Leaves the copied files on the machine for future monthly use
-    - Does NOT close windows automatically
 #>
 
 param(
-    # Drive letter passed from BAT launcher (e.g., "D:")
-    [string]$ScriptDrive = "D:",
-    
-    # Construct source folder from detected drive
-    [string]$SourceFolder = "$ScriptDrive\AbtPS_SDK_1.3",
-    
-    [string]$LocalParentFolder = "$env:ProgramData",
+    [string]$InstallPath = "$env:ProgramData\AbsoluteCheckIn",
+    [string]$GitHubRepo = "ClawdFlowers/absolute-checkin",
     [int]$MaxRetries = 3,
     [int]$InitialWaitSeconds = 30,
     [int]$PollSeconds = 30
 )
 
-$ScriptVersion = "0.6.2"
+$ScriptVersion = "0.7.0"
 $ErrorActionPreference = "Stop"
-
-# Display version info at startup
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Absolute Check-In Helper" -ForegroundColor Cyan
-Write-Host "  Version: $ScriptVersion" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host ""
 
 function Write-Info($msg) {
     Write-Host "[INFO]  $msg" -ForegroundColor Cyan
@@ -55,56 +43,182 @@ function Write-Bad($msg) {
     Write-Host "[FAIL]  $msg" -ForegroundColor Red
 }
 
-function Test-IsAdmin {
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+# Display version info at startup
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "  Absolute Check-In Helper" -ForegroundColor Cyan
+Write-Host "  Version: $ScriptVersion" -ForegroundColor Cyan
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# ==========================================
+# Install / Self-Update Section
+# ==========================================
+
+function Get-LocalVersion {
+    $versionFile = Join-Path $InstallPath "version.json"
+    if (Test-Path $versionFile) {
+        $content = Get-Content $versionFile -Raw | ConvertFrom-Json
+        return $content.version
+    }
+    return "0.0.0"
 }
 
-function Ensure-Admin {
-    if (-not (Test-IsAdmin)) {
-        Write-Info "Not running as Administrator. Relaunching with elevation..."
+function Get-RemoteVersion {
+    try {
+        $url = "https://raw.githubusercontent.com/$GitHubRepo/main/version.json"
+        $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+        $content = $response.Content | ConvertFrom-Json
+        return $content.version
+    } catch {
+        Write-WarnMsg "Could not reach GitHub for version check"
+        return $null
+    }
+}
 
-        $argList = @(
-            "-ExecutionPolicy", "Bypass",
-            "-File", "`"$PSCommandPath`"",
-            "-SourceFolder", "`"$SourceFolder`"",
-            "-LocalParentFolder", "`"$LocalParentFolder`"",
-            "-MaxRetries", $MaxRetries,
-            "-InitialWaitSeconds", $InitialWaitSeconds,
-            "-PollSeconds", $PollSeconds
-        )
+function Compare-Versions {
+    param([string]$Local, [string]$Remote)
+    try {
+        $localVer = [System.Version]$Local
+        $remoteVer = [System.Version]$Remote
+        return $remoteVer.CompareTo($localVer)
+    } catch {
+        return $Remote.CompareTo($Local)
+    }
+}
 
-        Start-Process powershell.exe -Verb RunAs -ArgumentList $argList
+function Install-ToProgramData {
+    if (-not (Test-Path $InstallPath)) {
+        Write-Info "Creating install directory: $InstallPath"
+        New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
+    }
+
+    $scriptName = Split-Path $PSCommandPath -Leaf
+    $batName = "Launch-Check-In.bat"
+    $sourceDir = Split-Path $PSCommandPath -Parent
+
+    $destScript = Join-Path $InstallPath $scriptName
+    if ($PSCommandPath -ne $destScript) {
+        Write-Info "Installing script to $InstallPath..."
+        Copy-Item -Path $PSCommandPath -Destination $destScript -Force
+    }
+
+    $sourceBat = Join-Path $sourceDir $batName
+    $destBat = Join-Path $InstallPath $batName
+    if ((Test-Path $sourceBat) -and ($sourceBat -ne $destBat)) {
+        Write-Info "Installing launcher to $InstallPath..."
+        Copy-Item -Path $sourceBat -Destination $destBat -Force
+    }
+
+    $versionFile = Join-Path $InstallPath "version.json"
+    if (-not (Test-Path $versionFile)) {
+        @{ version = $ScriptVersion } | ConvertTo-Json | Set-Content $versionFile
+    }
+}
+
+function Update-FromGitHub {
+    param([string]$TargetVersion)
+
+    $zipUrl = "https://github.com/$GitHubRepo/releases/download/v$TargetVersion/absolute-checkin-v$TargetVersion.zip"
+    $tempZip = Join-Path $env:TEMP "absolute-checkin-v$TargetVersion.zip"
+    $tempExtract = Join-Path $env:TEMP "absolute-checkin-v$TargetVersion"
+
+    try {
+        Write-Info "Downloading v$TargetVersion from GitHub..."
+        Invoke-WebRequest -Uri $zipUrl -OutFile $tempZip -UseBasicParsing -TimeoutSec 60
+
+        Write-Info "Extracting update..."
+        if (Test-Path $tempExtract) {
+            Remove-Item $tempExtract -Recurse -Force
+        }
+        Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
+
+        Write-Info "Updating files in $InstallPath..."
+        Get-ChildItem -Path $tempExtract | Where-Object { $_.Name -ne '.git' } | ForEach-Object {
+            $dest = Join-Path $InstallPath $_.Name
+            if ($_.PSIsContainer) {
+                Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
+            } else {
+                Copy-Item -Path $_.FullName -Destination $dest -Force
+            }
+        }
+
+        Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+        Remove-Item $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+
+        Write-Good "Updated to v$TargetVersion"
+
+        $updatedScript = Join-Path $InstallPath "Check-In-Absolute.ps1"
+        Write-Info "Relaunching updated script..."
+        Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$updatedScript`""
         exit
+    } catch {
+        Write-Bad "Update failed: $_"
+        Write-WarnMsg "Continuing with current version..."
     }
 }
 
-function Ensure-LocalSdk {
-    if (-not (Test-Path $SourceFolder)) {
-        throw "Source folder not found: $SourceFolder"
-    }
+# Step 1: Ensure installed to ProgramData
+Install-ToProgramData
 
-    $folderName = Split-Path $SourceFolder -Leaf
-    $localFolder = Join-Path $LocalParentFolder $folderName
-
-    if (-not (Test-Path $localFolder)) {
-        Write-Info "Local SDK folder not found. Copying entire folder from source..."
-        Copy-Item -Path $SourceFolder -Destination $LocalParentFolder -Recurse -Force
-        Write-Good "Copied SDK folder to $localFolder"
-    }
-    else {
-        Write-Info "SDK folder already exists locally: $localFolder"
-    }
-
-    $localExe = Join-Path $localFolder "AbtPS.exe"
-
-    if (-not (Test-Path $localExe)) {
-        throw "AbtPS.exe not found in local SDK folder: $localExe"
-    }
-
-    return $localExe
+# Step 2: Relaunch from install path if needed
+$installedScript = Join-Path $InstallPath (Split-Path $PSCommandPath -Leaf)
+if ($PSCommandPath -ne $installedScript) {
+    Write-Info "Relaunching from installed location..."
+    Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$installedScript`""
+    exit
 }
+
+# Step 3: Check for updates
+$localVersion = Get-LocalVersion
+$remoteVersion = Get-RemoteVersion
+
+if ($remoteVersion) {
+    $comparison = Compare-Versions -Local $localVersion -Remote $remoteVersion
+    if ($comparison -gt 0) {
+        Write-Info "Update available: v$localVersion -> v$remoteVersion"
+        Update-FromGitHub -TargetVersion $remoteVersion
+    } else {
+        Write-Info "Running latest version (v$localVersion)"
+    }
+} else {
+    Write-WarnMsg "Skipping version check — using v$localVersion"
+}
+
+# ==========================================
+# SDK Validation Section
+# ==========================================
+
+$localSdk = Join-Path $InstallPath "AbtPS_SDK_1.3"
+$exePath = Join-Path $localSdk "AbtPS.exe"
+
+if (-not (Test-Path $exePath)) {
+    Write-Bad "AbtPS_SDK_1.3 not found!"
+    Write-Host ""
+    Write-Host "Required files are missing. Please do the following:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  1. Obtain the AbtPS_SDK_1.3 folder from your IT department or supervisor" -ForegroundColor Yellow
+    Write-Host "  2. Copy the entire AbtPS_SDK_1.3 folder to:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "     $InstallPath" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  3. Re-run this script" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "The script will then proceed with the check-in process." -ForegroundColor Yellow
+    Write-Host ""
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
+Write-Good "AbtPS_SDK_1.3 found at $localSdk"
+
+$workingDir = Split-Path $exePath -Parent
+
+# ==========================================
+# Check-In Logic
+# ==========================================
+
+Set-Location $workingDir
+Write-Info "Working directory set to: $workingDir"
 
 function Invoke-Abt {
     param(
@@ -155,14 +269,6 @@ function Open-StatusWindow {
     Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -ArgumentList $cmdArgs -WorkingDirectory $workingDir
 }
 
-Ensure-Admin
-
-$exePath = Ensure-LocalSdk
-$workingDir = Split-Path $exePath -Parent
-
-Set-Location $workingDir
-Write-Info "Working directory set to: $workingDir"
-
 Write-Info "Opening a secondary CMD status window..."
 Open-StatusWindow -ExePath $exePath
 
@@ -185,7 +291,7 @@ while ($attempt -lt $MaxRetries) {
                 Write-Good "Check-in succeeded on attempt $attempt."
                 Write-Host ""
                 Write-Host "Done. SDK folder has been left in place at:" -ForegroundColor Green
-                Write-Host "  $(Split-Path $exePath -Parent)" -ForegroundColor Green
+                Write-Host "  $localSdk" -ForegroundColor Green
                 Read-Host "Press Enter to exit"
                 exit 0
             }
@@ -220,8 +326,6 @@ Write-Host "  $workingDir" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Manual command:" -ForegroundColor Yellow
 Write-Host "  .\AbtPS.exe -l" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "SDK folder was left in place for future use." -ForegroundColor Yellow
 
 Read-Host "Press Enter to exit"
 exit 1
