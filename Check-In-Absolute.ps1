@@ -2,7 +2,7 @@
 
 <#
     Absolute Check-In Helper
-    Version: 0.7.1
+    Version: 0.7.2
 
     What it does:
     - Installs to ProgramData if running from elsewhere
@@ -24,7 +24,7 @@ param(
     [int]$PollSeconds = 30
 )
 
-$ScriptVersion = "0.7.1a"
+$ScriptVersion = "0.7.2"
 $ErrorActionPreference = "Stop"
 
 function Write-Info($msg) {
@@ -149,7 +149,8 @@ function Update-FromGitHub {
 
         $updatedScript = Join-Path $InstallPath "Check-In-Absolute.ps1"
         Write-Info "Relaunching updated script..."
-        Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$updatedScript`""
+        $argString = '-ExecutionPolicy Bypass -File "' + $updatedScript + '"'
+        Start-Process powershell.exe -ArgumentList $argString
         exit
     } catch {
         Write-Bad "Update failed: $_"
@@ -164,7 +165,8 @@ Install-ToProgramData
 $installedScript = Join-Path $InstallPath (Split-Path $PSCommandPath -Leaf)
 if ($PSCommandPath -ne $installedScript) {
     Write-Info "Relaunching from installed location..."
-    Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$installedScript`""
+    $argString = '-ExecutionPolicy Bypass -File "' + $installedScript + '"'
+    Start-Process powershell.exe -ArgumentList $argString
     exit
 }
 
@@ -181,7 +183,7 @@ if ($remoteVersion) {
         Write-Info "Running latest version (v$localVersion)"
     }
 } else {
-    Write-WarnMsg "Skipping version check — using v$localVersion"
+    Write-WarnMsg "Skipping version check - using v$localVersion"
 }
 
 # ==========================================
