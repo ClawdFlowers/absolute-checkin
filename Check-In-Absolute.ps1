@@ -2,7 +2,7 @@
 
 <#
     Absolute Check-In Helper
-    Version: 0.7.0
+    Version: 0.7.1
 
     What it does:
     - Installs to ProgramData if running from elsewhere
@@ -24,7 +24,7 @@ param(
     [int]$PollSeconds = 30
 )
 
-$ScriptVersion = "0.7.0"
+$ScriptVersion = "0.7.1"
 $ErrorActionPreference = "Stop"
 
 function Write-Info($msg) {
@@ -264,7 +264,7 @@ function Open-StatusWindow {
     )
 
     $workingDir = Split-Path $ExePath -Parent
-    $cmdArgs = "/k cd /d `"$workingDir`" && echo Absolute status window opened. && echo. && AbtPS.exe -l && echo. && echo Run AbtPS.exe -l manually anytime."
+    $cmdArgs = '/k echo Absolute status window opened. & echo. & AbtPS.exe -l & echo. & echo Run AbtPS.exe -l manually anytime.'
 
     Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -ArgumentList $cmdArgs -WorkingDirectory $workingDir
 }
