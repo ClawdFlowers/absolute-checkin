@@ -24,7 +24,7 @@ param(
     [int]$PollSeconds = 30
 )
 
-$ScriptVersion = "0.7.2"
+$ScriptVersion = "0.7.3"
 $ErrorActionPreference = "Stop"
 
 function Write-Info($msg) {
@@ -193,7 +193,18 @@ if ($remoteVersion) {
 $localSdk = Join-Path $InstallPath "AbtPS_SDK_1.3"
 $exePath = Join-Path $localSdk "AbtPS.exe"
 
-if (-not (Test-Path $exePath)) {
+# Also check directly in ProgramData (legacy location from v0.6.x)
+$legacySdk = Join-Path $env:ProgramData "AbtPS_SDK_1.3"
+$legacyExe = Join-Path $legacySdk "AbtPS.exe"
+
+if (Test-Path $legacyExe) {
+    # SDK found in legacy location, move/copy it to current install path
+    Write-Info "Found SDK in legacy location: $legacySdk"
+    Write-Info "Copying to current install path..."
+    Copy-Item -Path $legacySdk -Destination $InstallPath -Recurse -Force
+    Write-Good "SDK copied to $InstallPath"
+}
+elseif (-not (Test-Path $exePath)) {
     Write-Bad "AbtPS_SDK_1.3 not found!"
     Write-Host ""
     Write-Host "Required files are missing. Please do the following:" -ForegroundColor Yellow
